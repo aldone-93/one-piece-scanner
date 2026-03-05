@@ -26,11 +26,11 @@ const RATIO_MAX = 1.85;
 
 // Area come % dello schermo
 const AREA_MIN_FRAC = 0.018;  // carta piccola/lontana
-const AREA_MAX_FRAC = 0.55;
+const AREA_MAX_FRAC = 0.92;   // carta quasi a tutto schermo
 
 // Solidity: area_contorno / area_bounding_rect — le carte sono ~rettangolari
 // Valori bassi = forme strane/rumore
-const SOLIDITY_MIN = 0.72;
+const SOLIDITY_MIN = 0.60;
 
 // Dimensione minima assoluta (px) — evita microcontorni
 const MIN_SIDE_PX = 60;
@@ -257,7 +257,7 @@ export default function OnePieceScanner() {
 
         // Cerca 4 punti con epsilon crescente
         let pts4 = null;
-        for (const eps of [0.01, 0.02, 0.03, 0.04, 0.06]) {
+        for (const eps of [0.01, 0.02, 0.03, 0.04, 0.06, 0.08, 0.10]) {
           const peri = cv.arcLength(cnt, true);
           const approx = new cv.Mat();
           cv.approxPolyDP(cnt, approx, eps * peri, true);
@@ -287,7 +287,7 @@ export default function OnePieceScanner() {
       frameN.current++;
       if (frameN.current % 15 === 0) {
         setCardCount(top.length);
-        if (debug) setDebugInfo({ total, pArea, pSolid, pRatio, p4pts, found: top.length, vw, vh, minA: Math.round(minA) });
+        if (debug) setDebugInfo({ total, pArea, pSolid, pRatio, p4pts, found: top.length, vw, vh, minA: Math.round(minA), maxA: Math.round(maxA) });
       }
 
       // ── Disegna overlay AR ───────────────────────────────────────
@@ -530,6 +530,7 @@ export default function OnePieceScanner() {
           <div style={{ color: "#FFD700", fontWeight: "bold", marginBottom: 2 }}>◆ DEBUG DETECTION</div>
           <div>Res: <b style={{ color: "#fff" }}>{debugInfo.vw}×{debugInfo.vh}</b></div>
           <div>Min area: <b style={{ color: "#fff" }}>{debugInfo.minA} px²</b></div>
+          <div>Max area: <b style={{ color: "#fff" }}>{debugInfo.maxA} px²</b></div>
           <div>Contorni totali: <b style={{ color: "#FFB347" }}>{debugInfo.total}</b></div>
           <div>Passano area: <b style={{ color: "#C3A6FF" }}>{debugInfo.pArea}</b></div>
           <div>Passano solidity ({SOLIDITY_MIN}): <b style={{ color: "#FFB347" }}>{debugInfo.pSolid}</b></div>
