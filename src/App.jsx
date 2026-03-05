@@ -14,7 +14,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 
 // ─── CONFIG — modifica qui ──────────────────────────────────────────
-const API_ENDPOINT = "/api/searchImage";
+const API_ENDPOINT = "https://crawlerop.up.railway.app//api/searchImage";
 const MAX_CARDS = 10;
 const CARD_W = 300;   // larghezza warp output (px)
 const CARD_H = 420;   // altezza  warp output (px)
