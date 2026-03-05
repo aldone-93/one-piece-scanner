@@ -445,10 +445,24 @@ export default function OnePieceScanner() {
 
   // ── STEP 1: genera previews warpate (NON chiama ancora l'API) ────
   const handlePreview = useCallback(() => {
-    const cards = cardsRef.current;
-    if (!cards.length || scanning) return;
+    if (scanning) return;
 
+    const cards = cardsRef.current;
     const cv = window.cv;
+
+    // Se non ci sono carte rilevate, cattura l'intero frame come unica immagine
+    if (!cards.length) {
+      const video = videoRef.current;
+      const tmpCanvas = document.createElement("canvas");
+      tmpCanvas.width = video.videoWidth;
+      tmpCanvas.height = video.videoHeight;
+      tmpCanvas.getContext("2d").drawImage(video, 0, 0);
+      const fallback = [{ idx: 0, dataUrl: tmpCanvas.toDataURL("image/jpeg", 0.92), canvas: tmpCanvas }];
+      setExcluded(new Set());
+      setPreviews(fallback);
+      return;
+    }
+
     const newPreviews = cards.map((card, idx) => {
       try {
         const tmpCanvas = warpCard(cv, videoRef.current, procRef.current, card.points);
