@@ -7,11 +7,14 @@
     "dev": "vite --host",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start": "serve dist -l $PORT",
+    "deploy": "npm run build && git add -A && git commit -m 'deploy' --allow-empty && git push"
   },
   "dependencies": {
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "serve": "^14.2.6"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
