@@ -372,9 +372,9 @@ export default function OnePieceScanner() {
       ctx.fillStyle = "#fff"; ctx.font = "bold 15px 'Rajdhani',sans-serif";
       ctx.fillText((result.name || "—").slice(0, 26), px + 20, sy + 28);
       ctx.fillStyle = pal.s; ctx.font = "11px 'Share Tech Mono',monospace";
-      ctx.fillText(result.set || "—", px + 20, sy + 48);
+      ctx.fillText(`${result.cardCode || "—"}  ·  ${result.rarity || "—"}`, px + 20, sy + 48);
       ctx.fillStyle = "#4ECDC4"; ctx.font = "bold 17px 'Rajdhani',sans-serif";
-      ctx.fillText(`€ ${result.price ?? "—"}`, px + 20, sy + 74);
+      ctx.fillText(result.minEu != null ? `€ ${result.minEu.toFixed(2)}` : "€ —", px + 20, sy + 74);
     }
     ctx.restore();
   }
@@ -414,19 +414,22 @@ export default function OnePieceScanner() {
         fd.append("image", blob, `card_${idx + 1}.jpg`);
         const res = await fetch(API_ENDPOINT, { method: "POST", body: fd });
         const data = await res.json();
+        const info = Array.isArray(data.productInfo) ? data.productInfo[0] : null;
         newResults[idx] = {
-          name: data.name || data.card_name || "Sconosciuta",
-          set: data.set || data.card_code || "—",
-          price: data.price || data.market_price || "—",
+          name: info?.name || data.name || "Sconosciuta",
+          cardCode: info?.cardCode || "—",
+          rarity: info?.fixed_properties?.onepiece_rarity || "—",
+          minEu: info?.minEu ?? null,
+          minIta: info?.minIta ?? null,
+          cardtraderUrl: info?.cardtrader_url || null,
         };
       } catch (err) {
         console.warn(`Carta ${idx + 1} errore:`, err);
         // Demo fallback — rimuovere in produzione
         const demo = [
-          { name: "Monkey D. Luffy", set: "OP01-001 · SEC", price: "45.00" },
-          { name: "Roronoa Zoro", set: "OP01-002 · SR", price: "12.50" },
-          { name: "Nami", set: "OP01-016 · R", price: "3.20" },
-          { name: "Tony Tony Chopper", set: "OP01-025 · R", price: "2.80" },
+          { name: "Monkey D. Luffy", cardCode: "OP01-001", rarity: "Secret Rare", minEu: 45, minIta: 50, cardtraderUrl: null },
+          { name: "Roronoa Zoro", cardCode: "OP01-002", rarity: "Super Rare", minEu: 12.5, minIta: 13, cardtraderUrl: null },
+          { name: "Nami", cardCode: "OP01-016", rarity: "Rare", minEu: 3.2, minIta: 3.5, cardtraderUrl: null },
         ];
         newResults[idx] = demo[idx % demo.length];
       }
@@ -570,15 +573,62 @@ export default function OnePieceScanner() {
           }}>
             {Object.entries(results).map(([idx, r]) => {
               const pal = PALETTE[parseInt(idx) % PALETTE.length];
+              const rarityColor = {
+                "Secret Rare": "#FFD700", "Leader Rare": "#FFD700",
+                "Super Rare": "#C3A6FF", "Rare": "#4ECDC4",
+                "Uncommon": "#87CEEB", "Common": "rgba(255,255,255,0.45)",
+              }[r.rarity] || "rgba(255,255,255,0.45)";
               return (
                 <div key={idx} style={{
-                  flex: "0 0 auto", minWidth: 150,
+                  flex: "0 0 auto", minWidth: 180,
                   background: "rgba(255,255,255,0.04)",
-                  border: `1px solid ${pal.s}`, borderRadius: 10, padding: "10px 14px",
+                  border: `1px solid ${pal.s}44`,
+                  borderLeft: `3px solid ${pal.s}`,
+                  borderRadius: 10, padding: "12px 14px",
+                  display: "flex", flexDirection: "column", gap: 4,
                 }}>
-                  <div style={{ color: "#fff", fontSize: 13, fontFamily: "'Rajdhani',sans-serif", fontWeight: 700, marginBottom: 2 }}>{r.name}</div>
-                  <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 10, marginBottom: 6 }}>{r.set}</div>
-                  <div style={{ color: "#4ECDC4", fontSize: 14, fontFamily: "'Rajdhani',sans-serif", fontWeight: 700 }}>€ {r.price}</div>
+                  {/* Card name */}
+                  <div style={{ color: "#fff", fontSize: 14, fontFamily: "'Rajdhani',sans-serif", fontWeight: 700, lineHeight: 1.2 }}>
+                    {r.name}
+                  </div>
+                  {/* Code · Rarity */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                    <span style={{ color: pal.s, fontSize: 10, fontFamily: "'Share Tech Mono',monospace", letterSpacing: 1 }}>
+                      {r.cardCode}
+                    </span>
+                    <span style={{
+                      fontSize: 9, padding: "1px 6px", borderRadius: 4,
+                      background: `${rarityColor}22`, color: rarityColor,
+                      border: `1px solid ${rarityColor}55`,
+                      fontFamily: "'Share Tech Mono',monospace", letterSpacing: 1,
+                    }}>{r.rarity}</span>
+                  </div>
+                  {/* Prices */}
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 2 }}>
+                    <div>
+                      <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 9, letterSpacing: 1, marginBottom: 1 }}>EU MIN</div>
+                      <div style={{ color: "#4ECDC4", fontSize: 16, fontFamily: "'Rajdhani',sans-serif", fontWeight: 700 }}>
+                        {r.minEu != null ? `€ ${Number(r.minEu).toFixed(2)}` : "€ —"}
+                      </div>
+                    </div>
+                    {r.minIta != null && (
+                      <div>
+                        <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 9, letterSpacing: 1, marginBottom: 1 }}>ITA</div>
+                        <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 13, fontFamily: "'Rajdhani',sans-serif", fontWeight: 600 }}>
+                          € {Number(r.minIta).toFixed(2)}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  {/* CardTrader link */}
+                  {r.cardtraderUrl && (
+                    <a href={r.cardtraderUrl} target="_blank" rel="noreferrer" style={{
+                      marginTop: 4, fontSize: 9, color: pal.s,
+                      textDecoration: "none", letterSpacing: 1,
+                      fontFamily: "'Share Tech Mono',monospace",
+                      opacity: 0.7,
+                    }}>↗ CARDTRADER</a>
+                  )}
                 </div>
               );
             })}
