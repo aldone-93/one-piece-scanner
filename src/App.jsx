@@ -107,7 +107,6 @@ export default function OnePieceScanner() {
   const animRef = useRef(null);
   const cardsRef = useRef([]);     // dati detection (punti/rect)
   const resultsRef = useRef({});
-  const frozenCardsRef = useRef([]); // posizioni congelate al momento dello scan
   const scanLineY = useRef(0);
   const frameN = useRef(0);
 
@@ -303,19 +302,9 @@ export default function OnePieceScanner() {
       ctx.fillStyle = sg;
       ctx.fillRect(0, scanLineY.current - 50, vw, 100);
 
-      // Se ci sono risultati, disegna i pannelli sulle posizioni congelate
-      const hasRes = Object.keys(resultsRef.current).length > 0;
-      if (hasRes) {
-        Object.entries(resultsRef.current).forEach(([idxStr, result]) => {
-          const idx = parseInt(idxStr);
-          const card = frozenCardsRef.current[idx];
-          if (card) drawCardAR(ctx, card, PALETTE[idx % PALETTE.length], result, idx, vw, vh);
-        });
-      } else {
-        top.forEach((card, idx) =>
-          drawCardAR(ctx, card, PALETTE[idx % PALETTE.length], null, idx, vw, vh)
-        );
-      }
+      top.forEach((card, idx) =>
+        drawCardAR(ctx, card, PALETTE[idx % PALETTE.length], idx, vw, vh)
+      );
 
     } catch (e) {
       console.warn("CV error:", e);
@@ -526,16 +515,6 @@ export default function OnePieceScanner() {
 
     resultsRef.current = { ...newResults };
     setResults({ ...newResults });
-    // Congela le posizioni indicizzate per idx (stesso schema di resultsRef)
-    const frozen = {};
-    previews.forEach((p, i) => {
-      if (excluded.has(p.idx) || !p.canvas) return;
-      frozen[p.idx] = cardsRef.current[p.idx] || {
-        rect: { x: 20, y: 20 + i * 150, width: 200, height: 280 },
-        points: [{ x: 20, y: 20 + i * 150 }, { x: 220, y: 20 + i * 150 }, { x: 220, y: 300 + i * 150 }, { x: 20, y: 300 + i * 150 }],
-      };
-    });
-    frozenCardsRef.current = frozen;
     setScanning(false);
     setSendingIdx(null);
     setPreviews(null);
@@ -543,7 +522,6 @@ export default function OnePieceScanner() {
 
   const handleReset = () => {
     resultsRef.current = {};
-    frozenCardsRef.current = {};
     setResults({});
     setPreviews(null);
     setExcluded(new Set());
@@ -664,6 +642,72 @@ export default function OnePieceScanner() {
             </span>
           )}
         </div>
+
+        {/* Risultati API — card scorrevoli */}
+        {hasResults && !previews && (
+          <div style={{
+            display: "flex", gap: 10, overflowX: "auto",
+            marginBottom: 14, paddingBottom: 4,
+            animation: "slideUp 0.3s ease", scrollbarWidth: "thin",
+          }}>
+            {Object.entries(results).map(([idx, r]) => {
+              const pal = PALETTE[parseInt(idx) % PALETTE.length];
+              const rarityColor = {
+                "Secret Rare": "#FFD700", "Leader Rare": "#FFD700",
+                "Super Rare": "#C3A6FF", "Rare": "#4ECDC4",
+                "Uncommon": "#87CEEB", "Common": "rgba(255,255,255,0.45)",
+              }[r.rarity] || "rgba(255,255,255,0.45)";
+              return (
+                <div key={idx} style={{
+                  flex: "0 0 auto", minWidth: 180,
+                  background: "rgba(255,255,255,0.04)",
+                  border: `1px solid ${pal.s}44`,
+                  borderLeft: `3px solid ${pal.s}`,
+                  borderRadius: 10, padding: "12px 14px",
+                  display: "flex", flexDirection: "column", gap: 4,
+                }}>
+                  <div style={{ color: "#fff", fontSize: 14, fontFamily: "'Rajdhani',sans-serif", fontWeight: 700, lineHeight: 1.2 }}>
+                    {r.name}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                    <span style={{ color: pal.s, fontSize: 10, fontFamily: "'Share Tech Mono',monospace", letterSpacing: 1 }}>
+                      {r.cardCode}
+                    </span>
+                    <span style={{
+                      fontSize: 9, padding: "1px 6px", borderRadius: 4,
+                      background: `${rarityColor}22`, color: rarityColor,
+                      border: `1px solid ${rarityColor}55`,
+                      fontFamily: "'Share Tech Mono',monospace", letterSpacing: 1,
+                    }}>{r.rarity}</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 2 }}>
+                    <div>
+                      <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 9, letterSpacing: 1, marginBottom: 1 }}>EU MIN</div>
+                      <div style={{ color: "#4ECDC4", fontSize: 16, fontFamily: "'Rajdhani',sans-serif", fontWeight: 700 }}>
+                        {r.minEu != null ? `€ ${Number(r.minEu).toFixed(2)}` : "€ —"}
+                      </div>
+                    </div>
+                    {r.minIta != null && (
+                      <div>
+                        <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 9, letterSpacing: 1, marginBottom: 1 }}>ITA</div>
+                        <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 13, fontFamily: "'Rajdhani',sans-serif", fontWeight: 600 }}>
+                          € {Number(r.minIta).toFixed(2)}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  {r.cardtraderUrl && (
+                    <a href={r.cardtraderUrl} target="_blank" rel="noreferrer" style={{
+                      marginTop: 4, fontSize: 9, color: pal.s,
+                      textDecoration: "none", letterSpacing: 1,
+                      fontFamily: "'Share Tech Mono',monospace", opacity: 0.7,
+                    }}>↗ CARDTRADER</a>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {/* Pulsanti principali */}
         {!previews && (
