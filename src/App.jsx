@@ -107,6 +107,7 @@ export default function OnePieceScanner() {
   const animRef = useRef(null);
   const cardsRef = useRef([]);     // dati detection (punti/rect)
   const resultsRef = useRef({});
+  const frozenCardsRef = useRef([]); // posizioni congelate al momento dello scan
   const scanLineY = useRef(0);
   const frameN = useRef(0);
 
@@ -302,9 +303,19 @@ export default function OnePieceScanner() {
       ctx.fillStyle = sg;
       ctx.fillRect(0, scanLineY.current - 50, vw, 100);
 
-      top.forEach((card, idx) =>
-        drawCardAR(ctx, card, PALETTE[idx % PALETTE.length], resultsRef.current[idx], idx, vw, vh)
-      );
+      // Se ci sono risultati, disegna i pannelli sulle posizioni congelate
+      const hasRes = Object.keys(resultsRef.current).length > 0;
+      if (hasRes) {
+        Object.entries(resultsRef.current).forEach(([idxStr, result]) => {
+          const idx = parseInt(idxStr);
+          const card = frozenCardsRef.current[idx];
+          if (card) drawCardAR(ctx, card, PALETTE[idx % PALETTE.length], result, idx, vw, vh);
+        });
+      } else {
+        top.forEach((card, idx) =>
+          drawCardAR(ctx, card, PALETTE[idx % PALETTE.length], null, idx, vw, vh)
+        );
+      }
 
     } catch (e) {
       console.warn("CV error:", e);
@@ -515,6 +526,16 @@ export default function OnePieceScanner() {
 
     resultsRef.current = { ...newResults };
     setResults({ ...newResults });
+    // Congela le posizioni indicizzate per idx (stesso schema di resultsRef)
+    const frozen = {};
+    previews.forEach((p, i) => {
+      if (excluded.has(p.idx) || !p.canvas) return;
+      frozen[p.idx] = cardsRef.current[p.idx] || {
+        rect: { x: 20, y: 20 + i * 150, width: 200, height: 280 },
+        points: [{ x: 20, y: 20 + i * 150 }, { x: 220, y: 20 + i * 150 }, { x: 220, y: 300 + i * 150 }, { x: 20, y: 300 + i * 150 }],
+      };
+    });
+    frozenCardsRef.current = frozen;
     setScanning(false);
     setSendingIdx(null);
     setPreviews(null);
@@ -522,6 +543,7 @@ export default function OnePieceScanner() {
 
   const handleReset = () => {
     resultsRef.current = {};
+    frozenCardsRef.current = {};
     setResults({});
     setPreviews(null);
     setExcluded(new Set());
