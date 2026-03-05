@@ -356,25 +356,89 @@ export default function OnePieceScanner() {
 
     // Pannello risultati AR
     if (result) {
-      const pw = Math.max(rect.width, 210), ph = 90;
+      const hasIta = result.minIta != null;
+      const ph = hasIta ? 130 : 116;
+      const pw = Math.max(rect.width, 230);
       const px = Math.max(4, Math.min(rect.x, vw - pw - 4));
       const py = rect.y > ph + 12 ? rect.y - ph - 10 : rect.y + rect.height + 10;
       const sy = Math.max(4, Math.min(py, vh - ph - 4));
 
-      ctx.shadowColor = pal.s; ctx.shadowBlur = 8;
-      ctx.fillStyle = "rgba(8,12,25,0.93)";
+      // Sfondo pannello
+      ctx.shadowColor = pal.s; ctx.shadowBlur = 10;
+      ctx.fillStyle = "rgba(6,10,22,0.95)";
       roundRect(ctx, px, sy, pw, ph, 10); ctx.fill();
       ctx.strokeStyle = pal.s; ctx.lineWidth = 1.5;
       roundRect(ctx, px, sy, pw, ph, 10); ctx.stroke();
       ctx.shadowBlur = 0;
 
-      ctx.fillStyle = pal.s; roundRect(ctx, px + 8, sy + 10, 4, ph - 20, 2); ctx.fill();
-      ctx.fillStyle = "#fff"; ctx.font = "bold 15px 'Rajdhani',sans-serif";
-      ctx.fillText((result.name || "—").slice(0, 26), px + 20, sy + 28);
-      ctx.fillStyle = pal.s; ctx.font = "11px 'Share Tech Mono',monospace";
-      ctx.fillText(`${result.cardCode || "—"}  ·  ${result.rarity || "—"}`, px + 20, sy + 48);
-      ctx.fillStyle = "#4ECDC4"; ctx.font = "bold 17px 'Rajdhani',sans-serif";
-      ctx.fillText(result.minEu != null ? `€ ${result.minEu.toFixed(2)}` : "€ —", px + 20, sy + 74);
+      // Barra colorata laterale
+      ctx.fillStyle = pal.s;
+      roundRect(ctx, px + 8, sy + 10, 4, ph - 20, 2); ctx.fill();
+
+      // Nome carta
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 15px 'Rajdhani',sans-serif";
+      const name = (result.name || "—");
+      const maxNameW = pw - 28;
+      let displayName = name;
+      ctx.font = "bold 15px 'Rajdhani',sans-serif";
+      while (ctx.measureText(displayName).width > maxNameW && displayName.length > 4)
+        displayName = displayName.slice(0, -1);
+      if (displayName !== name) displayName = displayName.slice(0, -1) + "…";
+      ctx.fillText(displayName, px + 20, sy + 26);
+
+      // Codice carta
+      ctx.fillStyle = pal.s;
+      ctx.font = "bold 11px 'Share Tech Mono',monospace";
+      ctx.fillText(result.cardCode || "—", px + 20, sy + 44);
+
+      // Rarity badge (testo)
+      const rarityColors = {
+        "Secret Rare": "#FFD700", "Leader Rare": "#FFD700",
+        "Super Rare": "#C3A6FF", "Rare": "#4ECDC4",
+        "Uncommon": "#87CEEB", "Common": "rgba(200,200,200,0.7)",
+      };
+      const rc = rarityColors[result.rarity] || "rgba(200,200,200,0.7)";
+      const codeW = ctx.measureText(result.cardCode || "—").width;
+      ctx.fillStyle = rc;
+      ctx.font = "10px 'Share Tech Mono',monospace";
+      ctx.fillText(`· ${result.rarity || "—"}`, px + 20 + codeW + 6, sy + 44);
+
+      // Separatore
+      ctx.strokeStyle = "rgba(255,255,255,0.08)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(px + 16, sy + 54); ctx.lineTo(px + pw - 16, sy + 54);
+      ctx.stroke();
+
+      // Label EU MIN
+      ctx.fillStyle = "rgba(255,255,255,0.35)";
+      ctx.font = "9px 'Share Tech Mono',monospace";
+      ctx.fillText("EU MIN", px + 20, sy + 70);
+
+      // Prezzo EU grande
+      ctx.fillStyle = "#4ECDC4";
+      ctx.font = "bold 22px 'Rajdhani',sans-serif";
+      const euText = result.minEu != null ? `€ ${Number(result.minEu).toFixed(2)}` : "€ —";
+      ctx.fillText(euText, px + 20, sy + 92);
+
+      // Prezzo ITA (se presente)
+      if (hasIta) {
+        const euW = ctx.measureText(euText).width;
+        ctx.fillStyle = "rgba(255,255,255,0.35)";
+        ctx.font = "9px 'Share Tech Mono',monospace";
+        ctx.fillText("ITA", px + 20 + euW + 14, sy + 70);
+        ctx.fillStyle = "rgba(255,255,255,0.6)";
+        ctx.font = "bold 15px 'Rajdhani',sans-serif";
+        ctx.fillText(`€ ${Number(result.minIta).toFixed(2)}`, px + 20 + euW + 14, sy + 92);
+      }
+
+      // Link CardTrader
+      if (result.cardtraderUrl) {
+        ctx.fillStyle = `${pal.s}99`;
+        ctx.font = "9px 'Share Tech Mono',monospace";
+        ctx.fillText("↗ cardtrader.com", px + 20, sy + ph - 10);
+      }
     }
     ctx.restore();
   }
@@ -459,7 +523,7 @@ export default function OnePieceScanner() {
 
   const loadPct = (cvReady ? 50 : 0) + (camReady ? 50 : 0);
   const hasResults = Object.keys(results).length > 0;
-  const btnDisabled = !ready || cardCount === 0 || scanning || !!previews;
+  const btnDisabled = !ready || scanning || !!previews;
   const confirmCount = previews ? previews.length - excluded.size : 0;
 
   // ─── RENDER ────────────────────────────────────────────────────────
@@ -564,77 +628,6 @@ export default function OnePieceScanner() {
             </span>
           )}
         </div>
-
-        {/* Risultati API */}
-        {hasResults && !previews && (
-          <div style={{
-            display: "flex", gap: 10, overflowX: "auto",
-            marginBottom: 14, paddingBottom: 4,
-            animation: "slideUp 0.3s ease", scrollbarWidth: "thin",
-          }}>
-            {Object.entries(results).map(([idx, r]) => {
-              const pal = PALETTE[parseInt(idx) % PALETTE.length];
-              const rarityColor = {
-                "Secret Rare": "#FFD700", "Leader Rare": "#FFD700",
-                "Super Rare": "#C3A6FF", "Rare": "#4ECDC4",
-                "Uncommon": "#87CEEB", "Common": "rgba(255,255,255,0.45)",
-              }[r.rarity] || "rgba(255,255,255,0.45)";
-              return (
-                <div key={idx} style={{
-                  flex: "0 0 auto", minWidth: 180,
-                  background: "rgba(255,255,255,0.04)",
-                  border: `1px solid ${pal.s}44`,
-                  borderLeft: `3px solid ${pal.s}`,
-                  borderRadius: 10, padding: "12px 14px",
-                  display: "flex", flexDirection: "column", gap: 4,
-                }}>
-                  {/* Card name */}
-                  <div style={{ color: "#fff", fontSize: 14, fontFamily: "'Rajdhani',sans-serif", fontWeight: 700, lineHeight: 1.2 }}>
-                    {r.name}
-                  </div>
-                  {/* Code · Rarity */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                    <span style={{ color: pal.s, fontSize: 10, fontFamily: "'Share Tech Mono',monospace", letterSpacing: 1 }}>
-                      {r.cardCode}
-                    </span>
-                    <span style={{
-                      fontSize: 9, padding: "1px 6px", borderRadius: 4,
-                      background: `${rarityColor}22`, color: rarityColor,
-                      border: `1px solid ${rarityColor}55`,
-                      fontFamily: "'Share Tech Mono',monospace", letterSpacing: 1,
-                    }}>{r.rarity}</span>
-                  </div>
-                  {/* Prices */}
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 2 }}>
-                    <div>
-                      <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 9, letterSpacing: 1, marginBottom: 1 }}>EU MIN</div>
-                      <div style={{ color: "#4ECDC4", fontSize: 16, fontFamily: "'Rajdhani',sans-serif", fontWeight: 700 }}>
-                        {r.minEu != null ? `€ ${Number(r.minEu).toFixed(2)}` : "€ —"}
-                      </div>
-                    </div>
-                    {r.minIta != null && (
-                      <div>
-                        <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 9, letterSpacing: 1, marginBottom: 1 }}>ITA</div>
-                        <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 13, fontFamily: "'Rajdhani',sans-serif", fontWeight: 600 }}>
-                          € {Number(r.minIta).toFixed(2)}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  {/* CardTrader link */}
-                  {r.cardtraderUrl && (
-                    <a href={r.cardtraderUrl} target="_blank" rel="noreferrer" style={{
-                      marginTop: 4, fontSize: 9, color: pal.s,
-                      textDecoration: "none", letterSpacing: 1,
-                      fontFamily: "'Share Tech Mono',monospace",
-                      opacity: 0.7,
-                    }}>↗ CARDTRADER</a>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
 
         {/* Pulsanti principali */}
         {!previews && (
