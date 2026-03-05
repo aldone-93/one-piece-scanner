@@ -35,6 +35,11 @@ const SOLIDITY_MIN = 0.60;
 // Dimensione minima assoluta (px) — evita microcontorni
 const MIN_SIDE_PX = 60;
 
+// Stabilizzazione temporale
+const CONFIRM_FRAMES = 3;   // frame consecutivi prima di mostrare una carta
+const LOSE_FRAMES = 6;   // frame senza detection prima di nasconderla
+const LERP_ALPHA = 0.35; // velocità interpolazione punti (0=fermo, 1=raw)
+
 // ─── PALETTE ───────────────────────────────────────────────────────
 const PALETTE = [
   { s: "#FFD700", g: "rgba(255,215,0,0.10)" },
@@ -105,7 +110,8 @@ export default function OnePieceScanner() {
   const overlayRef = useRef(null);
   const procRef = useRef(null);
   const animRef = useRef(null);
-  const cardsRef = useRef([]);     // dati detection (punti/rect)
+  const cardsRef = useRef([]);        // carte stabili da mostrare
+  const trackerRef = useRef([]);      // tracker con hysteresis e smoothing
   const resultsRef = useRef({});
   const scanLineY = useRef(0);
   const frameN = useRef(0);
@@ -281,13 +287,71 @@ export default function OnePieceScanner() {
 
       // Ordina per area decrescente, prendi le prime N
       cards.sort((a, b) => b.area - a.area);
-      const top = cards.slice(0, MAX_CARDS);
-      cardsRef.current = top;
+      const rawTop = cards.slice(0, MAX_CARDS);
+
+      // ── Temporal tracking + smoothing ────────────────────────────
+      const lerp = (a, b, t) => a + (b - a) * t;
+      const lerpPt = (pa, pb, t) => ({ x: lerp(pa.x, pb.x, t), y: lerp(pa.y, pb.y, t) });
+      const centroid = (pts) => ({
+        x: pts.reduce((s, p) => s + p.x, 0) / pts.length,
+        y: pts.reduce((s, p) => s + p.y, 0) / pts.length,
+      });
+      const dist2 = (a, b) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2;
+
+      const trackers = trackerRef.current;
+
+      // Marca tutti come non visti questo frame
+      trackers.forEach(t => { t.seen = false; });
+
+      // Abbina ogni rilevazione raw al tracker più vicino
+      for (const raw of rawTop) {
+        const cRaw = centroid(raw.points);
+        let best = null, bestD = Infinity;
+        for (const t of trackers) {
+          const d = dist2(cRaw, centroid(t.points));
+          if (d < bestD) { bestD = d; best = t; }
+        }
+        const maxMatchDist = (raw.rect.width + raw.rect.height) ** 2 * 0.5;
+        if (best && bestD < maxMatchDist) {
+          // Interpolazione punti verso il raw
+          best.points = best.points.map((p, i) => lerpPt(p, raw.points[i], LERP_ALPHA));
+          best.rect = {
+            x: lerp(best.rect.x, raw.rect.x, LERP_ALPHA),
+            y: lerp(best.rect.y, raw.rect.y, LERP_ALPHA),
+            width: lerp(best.rect.width, raw.rect.width, LERP_ALPHA),
+            height: lerp(best.rect.height, raw.rect.height, LERP_ALPHA),
+          };
+          best.seen = true;
+          best.confirmCount = Math.min(best.confirmCount + 1, CONFIRM_FRAMES);
+          best.loseCount = 0;
+        } else {
+          // Nuova carta
+          trackers.push({
+            points: raw.points,
+            rect: raw.rect,
+            seen: true,
+            confirmCount: 1,
+            loseCount: 0,
+          });
+        }
+      }
+
+      // Aggiorna i tracker non visti e rimuovi quelli scaduti
+      for (let i = trackers.length - 1; i >= 0; i--) {
+        if (!trackers[i].seen) {
+          trackers[i].loseCount++;
+          if (trackers[i].loseCount > LOSE_FRAMES) trackers.splice(i, 1);
+        }
+      }
+
+      // Solo le carte confermate (viste abbastanza a lungo)
+      const stableCards = trackers.filter(t => t.confirmCount >= CONFIRM_FRAMES);
+      cardsRef.current = stableCards;
 
       frameN.current++;
       if (frameN.current % 15 === 0) {
-        setCardCount(top.length);
-        if (debug) setDebugInfo({ total, pArea, pSolid, pRatio, p4pts, found: top.length, vw, vh, minA: Math.round(minA), maxA: Math.round(maxA) });
+        setCardCount(stableCards.length);
+        if (debug) setDebugInfo({ total, pArea, pSolid, pRatio, p4pts, found: stableCards.length, vw, vh, minA: Math.round(minA), maxA: Math.round(maxA) });
       }
 
       // ── Disegna overlay AR ───────────────────────────────────────
@@ -302,7 +366,7 @@ export default function OnePieceScanner() {
       ctx.fillStyle = sg;
       ctx.fillRect(0, scanLineY.current - 50, vw, 100);
 
-      top.forEach((card, idx) =>
+      stableCards.forEach((card, idx) =>
         drawCardAR(ctx, card, PALETTE[idx % PALETTE.length], idx, vw, vh)
       );
 
@@ -522,6 +586,7 @@ export default function OnePieceScanner() {
 
   const handleReset = () => {
     resultsRef.current = {};
+    trackerRef.current = [];
     setResults({});
     setPreviews(null);
     setExcluded(new Set());
